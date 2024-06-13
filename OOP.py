@@ -8,10 +8,17 @@ from io import BytesIO
 import math
 import concurrent.futures
 import threading
+import os 
+import concurrent.futures
+import time
 
 class ImageSearchPipeline:
-    def __init__(self, image_url, description=None):
-        self.image_url = image_url
+    def __init__(self, image_input, description=None):
+        if os.path.exists(image_input):
+            self.image_path = image_input
+            self.image_url = self.upload_image(image_input)
+        else:
+            self.image_url = image_input
         self.description = description
 
     def get_product_description(self):
@@ -48,24 +55,24 @@ class ImageSearchPipeline:
 
         return completion.choices[0].message.content
 
-    def google_image_search(self, image):
+    def google_image_search(self):
         params = {
             "api_key": "ae041daff797b75cd1cc83d15bc09ef8853c296ca38b13e19872c9914014aaf4",
             "engine": "google_reverse_image",
             "google_domain": "google.com",
-            "image_url": image
+            "image_url": self.image_url
         }
 
         search = GoogleSearch(params)
         results = search.get_dict()
         return results
 
-    def google_lens_search(self, image):
+    def google_lens_search(self):
         params = {
             "api_key": "ae041daff797b75cd1cc83d15bc09ef8853c296ca38b13e19872c9914014aaf4",
             "engine": "google_lens",
             "google_domain": "google.com",
-            "url": image
+            "url": self.image_url 
         }
 
         search = GoogleSearch(params)
@@ -120,12 +127,12 @@ class ImageSearchPipeline:
         response = requests.post('https://api.imgbb.com/1/upload', data=data)
         return response.json()['data']['url']
 
-    def concatenate_thumbnails(self, initial_image_url, engine, search_results, columns=6, output_path=None):
+    def concatenate_thumbnails(self, engine, search_results, columns=6, output_path=None):
         if output_path is None:
             output_path = "thumbnails_" + engine + ".jpg"
 
         if engine == 'gs':
-            thumbnails = [initial_image_url] + [
+            thumbnails = [self.image_url] + [
                 result['thumbnail']
                 for result in search_results['organic_results']
                 if 'thumbnail' in result
@@ -138,17 +145,17 @@ class ImageSearchPipeline:
             amazon_choice = results['results']['amazons_choices']
             o_imgs = [item['url_image'] for item in organic if 'url_image' in item]
             ac_imgs = [item['url_image'] for item in amazon_choice if 'url_image' in item]
-            thumbnails = [initial_image_url] + o_imgs + ac_imgs
+            thumbnails = [self.image_url] + o_imgs + ac_imgs
 
         elif engine == 'gis':
-            thumbnails = [initial_image_url] + [
+            thumbnails = [self.image_url] + [
                 result['thumbnail']
                 for result in search_results['image_results']
                 if 'thumbnail' in result
             ]
 
         elif engine == 'lens':
-            thumbnails = [initial_image_url] + [
+            thumbnails = [self.image_url] + [
                 result['thumbnail']
                 for result in search_results['visual_matches']
                 if 'thumbnail' in result
@@ -191,3 +198,121 @@ class ImageSearchPipeline:
         return output_path
 
     
+    def get_matching_images(self, image_urls):
+        message_text="You will be given four image galleries with each image labeled from 0 to n. Combine with the description and compare all other images to image 0 and return in JSON with the image index that is visually matching closest with image 0 for each image gallery"
+        azure_client_westus3 = AzureOpenAI(
+        api_key="66cfcde63be3491f82c764c4cff7b6d5",
+        api_version="2024-02-15-preview",
+        azure_endpoint="https://buysmartusnc.openai.azure.com/",
+    )
+        completion = azure_client_westus3.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+        {"role": "system", "content": message_text},
+        {
+        "role": "user",
+        "content": [
+            # {
+            # "type": "text",
+            # # "text": "User description: " + self.description,
+            # },
+            {
+            "type": "image_url",
+            "image_url": {
+                "url": image_urls[0],
+            },
+            },
+            {
+            "type": "image_url",
+            "image_url": {
+                "url": image_urls[1],
+            },
+            },
+            {
+            "type": "image_url",
+            "image_url": {
+                "url": image_urls[2],
+            },
+            },
+            {
+            "type": "image_url",
+            "image_url": {
+                "url": image_urls[3],
+            },
+            },
+        ],
+        }
+    ],
+        max_tokens=2000,
+        temperature=0,
+        response_format={"type": "json_object"},
+    )
+
+        return completion.choices[0].message.content
+    
+    def process_search(self, engine, query):
+        if engine == 'amz':
+            results = self.amazon_search(query)
+        if engine == 'gs':
+            results = self.google_search(query)
+        if engine == 'gis':
+            results = self.google_image_search()
+        if engine == 'lens':
+            results = self.google_lens_search()
+        
+        image_path = self.concatenate_thumbnails(engine, results)
+        image_url = self.upload_image(image_path)
+        return image_url
+
+
+    def pipeline(self):
+        # We can use a with statement to ensure threads are cleaned up promptly
+        query = self.get_product_description()
+        data = json.loads(query)
+        query = data['query']
+        image_bundle = []
+        engines = ['amz', 'gs', 'gis', 'lens']
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = {executor.submit(self.process_search, engine, query): engine for engine in engines}
+
+            for future in concurrent.futures.as_completed(futures):
+                engine = futures[future]
+                try:
+                    image_url = future.result()
+                    image_bundle.append(image_url)
+                except Exception as exc:
+                    print(f"{engine} generated an exception: {exc}")
+
+        
+        # supposedly a list of indices 
+        matching_indices = self.get_matching_images(image_bundle)
+
+        return matching_indices
+        
+    def run(self):
+        return self.pipeline()
+        
+def main():
+    # 使用一个有效的图片URL或本地图片路径进行测试
+    # 本地图片路径示例
+    # image_input = 'path/to/local/image.jpg'
+    # 远程图片URL示例
+    image_input = 'https://helios-i.mashable.com/imagery/articles/01sbS8J2wBnF03pAOEvubz8/hero-image.fill.size_1248x702.v1716232512.png'
+
+    # 实例化类
+    pipeline = ImageSearchPipeline(image_input=image_input)
+
+    start = time.time()
+    # 运行pipeline
+    matching_indices = pipeline.run()
+
+    end = time.time()
+    # 打印结果
+    print("\nMatching Indices:")
+    print(matching_indices)
+    print(f"time used: {end - start}s")
+
+
+if __name__ == "__main__":
+    main()
