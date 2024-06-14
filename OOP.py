@@ -270,48 +270,44 @@ class ImageSearchPipeline:
         query = self.get_product_description()
         data = json.loads(query)
         query = data['query']
-        image_bundle = []
         engines = ['amz', 'gs', 'gis', 'lens']
+        image_bundle = [None] * len(engines)
+        matching_links = []
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            futures = {executor.submit(self.process_search, engine, query): engine for engine in engines}
+            future_to_engine = {executor.submit(self.process_search, engine, query): idx for idx, engine in enumerate(engines)}
 
-            for future in concurrent.futures.as_completed(futures):
-                engine = futures[future]
+            for future in concurrent.futures.as_completed(future_to_engine):
+                idx = future_to_engine[future]
                 try:
                     image_url = future.result()
-                    image_bundle.append(image_url)
+                    image_bundle[idx] = image_url
                 except Exception as exc:
-                    print(f"{engine} generated an exception: {exc}")
+                    print(f"Engine {engines[idx]} generated an exception: {exc}")
 
         
         # supposedly a list of indices 
-        matching_indices = self.get_matching_images(image_bundle)
-
+        matching_indices_json = self.get_matching_images(image_bundle)
+        temp = json.loads(matching_indices_json)
+        matching_indices = list(temp.values())
         return matching_indices
         
     def run(self):
         return self.pipeline()
         
 def main():
-    # 使用一个有效的图片URL或本地图片路径进行测试
-    # 本地图片路径示例
-    # image_input = 'path/to/local/image.jpg'
-    # 远程图片URL示例
     image_input = 'https://helios-i.mashable.com/imagery/articles/01sbS8J2wBnF03pAOEvubz8/hero-image.fill.size_1248x702.v1716232512.png'
 
-    # 实例化类
     pipeline = ImageSearchPipeline(image_input=image_input)
 
     start = time.time()
-    # 运行pipeline
     matching_indices = pipeline.run()
-
     end = time.time()
-    # 打印结果
+
+
     print("\nMatching Indices:")
     print(matching_indices)
-    print(f"time used: {end - start}s")
+    print(f"time used: {end - start} s")
 
 
 if __name__ == "__main__":
