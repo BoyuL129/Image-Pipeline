@@ -20,6 +20,7 @@ class ImageSearchPipeline:
         else:
             self.image_url = image_input
         self.description = description
+        self.cached_results = {}
 
     def get_product_description(self):
         message_text = (
@@ -260,9 +261,74 @@ class ImageSearchPipeline:
         if engine == 'lens':
             results = self.google_lens_search()
         
+        self.cached_results[engine] = results
         image_path = self.concatenate_thumbnails(engine, results)
         image_url = self.upload_image(image_path)
         return image_url
+
+    import json
+
+    def extract_matching_objects(self, matching_indices):
+        extracted_objects = {}
+        engines = ['amz', 'gs', 'gis', 'lens']
+        
+        for index, engine in zip(matching_indices, engines):
+            print(f"Processing engine: {engine}, index: {index}")
+            if engine == 'amz':
+                results = self.cached_results.get(engine, {})
+                if results:
+                    results = json.loads(results)
+                    results = results['results'][0]['content']['results']
+                    organic = results['results']['organic']
+                    amazon_choice = results['results']['amazons_choices']
+                    all_objects = organic + amazon_choice
+                    for item in all_objects:
+                        if item.get('url_image') and item.get('pos') == index:
+                            full_url = f"https://www.amazon.com{item.get('url')}"
+                            extracted_objects['amazon'] = {
+                                'title': item.get('title'),
+                                'price': item.get('price'),
+                                'link': full_url,
+                                'image': item.get('url_image')
+                            }
+                            break
+                else:
+                    print(f"No results found for engine {engine}")
+            elif engine == 'gs':
+                results = self.cached_results.get(engine, {})
+                if 'organic_results' in results:
+                    for item in results['organic_results']:
+                        if 'thumbnail' in item and item.get('position') == index:
+                            extracted_objects['google_search'] = {
+                                'title': item.get('title'),
+                                'link': item.get('link'),
+                                'image': item.get('thumbnail')
+                            }
+                            break
+            elif engine == 'gis':
+                results = self.cached_results.get(engine, {})
+                if 'image_results' in results:
+                    for item in results['image_results']:
+                        if 'thumbnail' in item and item.get('position') == index:
+                            extracted_objects['google_image_search'] = {
+                                'title': item.get('title'),
+                                'link': item.get('link'),
+                                'image': item.get('thumbnail')
+                            }
+                            break
+            elif engine == 'lens':
+                results = self.cached_results.get(engine, {})
+                if 'visual_matches' in results:
+                    for item in results['visual_matches']:
+                        if 'thumbnail' in item and item.get('position') == index:
+                            extracted_objects['google_lens'] = {
+                                'title': item.get('title'),
+                                'link': item.get('link'),
+                                'image': item.get('thumbnail')
+                            }
+                            break
+    
+        return extracted_objects
 
 
     def pipeline(self):
@@ -286,11 +352,12 @@ class ImageSearchPipeline:
                     print(f"Engine {engines[idx]} generated an exception: {exc}")
 
         
-        # supposedly a list of indices 
         matching_indices_json = self.get_matching_images(image_bundle)
         temp = json.loads(matching_indices_json)
         matching_indices = list(temp.values())
-        return matching_indices
+
+        # retrieving information from search results
+        return self.extract_matching_objects(matching_indices)
         
     def run(self):
         return self.pipeline()
