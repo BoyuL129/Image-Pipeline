@@ -338,7 +338,6 @@ class ImageSearchPipeline:
         query = data['query']
         engines = ['amz', 'gs', 'gis', 'lens']
         image_bundle = [None] * len(engines)
-        matching_links = []
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_to_engine = {executor.submit(self.process_search, engine, query): idx for idx, engine in enumerate(engines)}
