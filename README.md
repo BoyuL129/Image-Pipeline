@@ -5,6 +5,29 @@
 1. **Caching**:
    - Implement a caching layer (e.g., Redis) for search results and image processing.
    - Cache the product descriptions to avoid repeated API calls for similar images.
+   - **Why**: Reduces repeated computations and API calls.
+   - **How**: 
+     1. Implement Redis as a caching layer.
+     2. Cache product descriptions, search results, and processed images.
+     3. Set appropriate expiration times for cached items.
+   - **Example**:
+     ```python
+     import redis
+   
+     r = redis.Redis(host='localhost', port=6379, db=0)
+     
+     def get_product_description(self):
+         cache_key = f"product_desc:{self.image_url}"
+         cached_result = r.get(cache_key)
+         if cached_result:
+             return cached_result.decode('utf-8')
+         
+         # Existing code to get product description
+         result = ...
+         
+         r.setex(cache_key, 3600, result)  # Cache for 1 hour
+         return result
+     ```
 
 2. **Asynchronous Processing**:
    - Use `asyncio` and `aiohttp` for concurrent API requests instead of `concurrent.futures`.
