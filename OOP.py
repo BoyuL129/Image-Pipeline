@@ -266,7 +266,6 @@ class ImageSearchPipeline:
         image_url = self.upload_image(image_path)
         return image_url
 
-    import json
 
     def extract_matching_objects(self, matching_indices):
         extracted_objects = {}
