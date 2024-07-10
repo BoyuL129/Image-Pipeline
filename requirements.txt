@@ -1,6 +1,11 @@
-fastapi
+Flask
 redis
 types-redis
 uvicorn
 pydantic
 python-multipart
+aiohttp
+pillow
+openai
+google-search-results
+python-dotenv
