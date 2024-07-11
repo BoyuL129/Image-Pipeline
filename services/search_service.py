@@ -4,6 +4,7 @@ from typing import Optional
 from dotenv import load_dotenv
 import os
 import asyncio
+from typing import Any
 
 load_dotenv()
 
@@ -42,7 +43,8 @@ class SearchService:
             "hl": "en"
         }
         search = GoogleSearch(params)
-        return search.get_dict()
+        results = await asyncio.to_thread(search.get_dict)
+        return results
 
     async def google_image_search(self, image_url: str):
         params = {
@@ -52,9 +54,10 @@ class SearchService:
             "image_url": image_url
         }
         search = GoogleSearch(params)
-        return search.get_dict()
+        results = await asyncio.to_thread(search.get_dict)
+        return results
 
-    async def google_lens_search(self, image_url: str):
+    async def google_lens_search(self, image_url: str)-> dict[Any, Any]:
         params = {
             "api_key": self.google_key,
             "engine": "google_lens",
@@ -62,13 +65,14 @@ class SearchService:
             "url": image_url 
         }
         search = GoogleSearch(params)
-        return search.get_dict()
+        results = await asyncio.to_thread(search.get_dict)
+        return results
 
 
 # Example usage
 async def main():
     search_service = SearchService()
-    result = await search_service.amazon_search("laptop")
+    result = await search_service.google_lens_search("https://m.media-amazon.com/images/I/41H1NQVybjL.jpg")
     print(result)
 
 if __name__ == "__main__":

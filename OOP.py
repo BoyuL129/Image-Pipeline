@@ -369,7 +369,6 @@ def main():
     matching_indices = pipeline.run()
     end = time.time()
 
-
     print("\nMatching Indices:")
     print(matching_indices)
     print(f"time used: {end - start} s")
