@@ -1,4 +1,4 @@
-Flask
+fastapi
 redis
 types-redis
 uvicorn
@@ -9,3 +9,6 @@ pillow
 openai
 google-search-results
 python-dotenv
+numpy
+opencv-python
+matplotlib

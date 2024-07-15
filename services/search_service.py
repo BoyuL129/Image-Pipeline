@@ -8,6 +8,7 @@ from typing import Any
 
 load_dotenv()
 
+
 class SearchService:
     def __init__(self):
         self.url = "https://scraper-api.smartproxy.com/v2/scrape"
@@ -57,12 +58,12 @@ class SearchService:
         results = await asyncio.to_thread(search.get_dict)
         return results
 
-    async def google_lens_search(self, image_url: str)-> dict[Any, Any]:
+    async def google_lens_search(self, image_url: str) -> dict[Any, Any]:
         params = {
             "api_key": self.google_key,
             "engine": "google_lens",
             "google_domain": "google.com",
-            "url": image_url 
+            "url": image_url
         }
         search = GoogleSearch(params)
         results = await asyncio.to_thread(search.get_dict)
@@ -72,7 +73,7 @@ class SearchService:
 # Example usage
 async def main():
     search_service = SearchService()
-    result = await search_service.google_lens_search("https://m.media-amazon.com/images/I/41H1NQVybjL.jpg")
+    result = await search_service.amazon_search("huawei")
     print(result)
 
 if __name__ == "__main__":
